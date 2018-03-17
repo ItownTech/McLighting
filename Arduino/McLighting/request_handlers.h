@@ -309,7 +309,14 @@ void sendState() {
   char buffer[root.measureLength() + 1];
   root.printTo(buffer, sizeof(buffer));
 
+  #ifdef ENABLE_MQTT
   mqtt_client.publish(mqtt_ha_state_out.c_str(), buffer, true);
+  DBG_OUTPUT_PORT.printf("MQTT: Send [%s]: %s\n", mqtt_ha_state_out.c_str(), buffer);
+  #endif
+  #ifdef ENABLE_AMQTT
+  amqttClient.publish(mqtt_ha_state_out.c_str(), 1, true, buffer);
+  DBG_OUTPUT_PORT.printf("MQTT: Send [%s]: %s\n", mqtt_ha_state_out.c_str(), buffer);
+  #endif
 }
 #endif
 
@@ -533,7 +540,7 @@ void checkForRequests() {
 // ***************************************************************************
 // MQTT callback / connection handler
 // ***************************************************************************
-#ifdef ENABLE_MQTT
+#if defined(ENABLE_MQTT) or defined(ENABLE_AMQTT)
 
   #ifdef ENABLE_HOMEASSISTANT
 
@@ -664,13 +671,24 @@ void checkForRequests() {
       return true;
     }
   #endif
+
+  #ifdef ENABLE_AMQTT
+    void onMqttMessage(char* topic, char* payload_in, AsyncMqttClientMessageProperties properties, size_t length, size_t index, size_t total) {
+    DBG_OUTPUT_PORT.print("MQTT: Recieved ["); DBG_OUTPUT_PORT.print(topic);
+//    DBG_OUTPUT_PORT.print("]: "); DBG_OUTPUT_PORT.println(payload_in);
+    uint8_t * payload = (uint8_t *) malloc(length + 1);
+    memcpy(payload, payload_in, length);
+    payload[length] = NULL;
+    DBG_OUTPUT_PORT.printf("]: %s\n", payload);
+  #endif
   
+  #ifdef ENABLE_MQTT
   void mqtt_callback(char* topic, byte* payload_in, unsigned int length) {
     uint8_t * payload = (uint8_t *)malloc(length + 1);
     memcpy(payload, payload_in, length);
     payload[length] = NULL;
     DBG_OUTPUT_PORT.printf("MQTT: Message arrived [%s]\n", payload);
-
+  #endif
     #ifdef ENABLE_HOMEASSISTANT
       if (strcmp(topic, mqtt_ha_state_in.c_str()) == 0) {
         if (!processJson((char*)payload)) {
@@ -682,15 +700,24 @@ void checkForRequests() {
         uint8_t d = (uint8_t) strtol((const char *) &payload[0], NULL, 10);
         ws2812fx_speed = constrain(d, 0, 255);
         strip.setSpeed(convertSpeed(ws2812fx_speed));
-    
+      #ifdef ENABLE_MQTT
       } else if (strcmp(topic, (char *)mqtt_intopic) == 0) {
+      #endif
+      #ifdef ENABLE_AMQTT
+      } else if (strcmp(topic, mqtt_intopic.c_str()) == 0) {
+      #endif
     #endif
   
       // # ==> Set main color
       if (payload[0] == '#') {
         handleSetMainColor(payload);
         DBG_OUTPUT_PORT.printf("MQTT: Set main color to [%u] [%u] [%u]\n", main_color.red, main_color.green, main_color.blue);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
         #ifdef ENABLE_HOMEASSISTANT
           stateOn = true;
           sendState();
@@ -703,7 +730,12 @@ void checkForRequests() {
         ws2812fx_speed = constrain(d, 0, 255);
         strip.setSpeed(convertSpeed(ws2812fx_speed));
         DBG_OUTPUT_PORT.printf("MQTT: Set speed to [%u]\n", ws2812fx_speed);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
       }
   
       // % ==> Set brightness
@@ -712,7 +744,12 @@ void checkForRequests() {
         brightness = constrain(b, 0, 255);
         strip.setBrightness(brightness);
         DBG_OUTPUT_PORT.printf("MQTT: Set brightness to [%u]\n", brightness);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
         #ifdef ENABLE_HOMEASSISTANT
           stateOn = true;
           sendState();
@@ -723,7 +760,12 @@ void checkForRequests() {
       if (payload[0] == '*') {
         handleSetAllMode(payload);
         DBG_OUTPUT_PORT.printf("MQTT: Set main color and light all LEDs [%s]\n", payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
         #ifdef ENABLE_HOMEASSISTANT
           stateOn = true;
           sendState();
@@ -734,20 +776,35 @@ void checkForRequests() {
       if (payload[0] == '!') {
         handleSetSingleLED(payload, 1);
         DBG_OUTPUT_PORT.printf("MQTT: Set single LED in given color [%s]\n", payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
       }
   
       // + ==> Set multiple LED in the given colors
       if (payload[0] == '+') {
         handleSetDifferentColors(payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
       }
   
       // R ==> Set range of LEDs in the given colors
       if (payload[0] == 'R') {
         handleRangeDifferentColors(payload);
         DBG_OUTPUT_PORT.printf("MQTT: Set range of LEDS to single color: [%s]\n", payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
       }
   
       // = ==> Activate named mode
@@ -755,7 +812,12 @@ void checkForRequests() {
         String str_mode = String((char *) &payload[0]);
         handleSetNamedMode(str_mode);
         DBG_OUTPUT_PORT.printf("MQTT: Activate named mode [%s]\n", payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
         #ifdef ENABLE_HOMEASSISTANT
           sendState();
         #endif
@@ -765,7 +827,13 @@ void checkForRequests() {
       if (payload[0] == '$') {
         DBG_OUTPUT_PORT.printf("MQTT: Get status info.\n");
         DBG_OUTPUT_PORT.println("MQTT: Out: " + String(listStatusJSON()));
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, listStatusJSON());
+        #endif
+        #ifdef ENABLE_AMQTT
+        String liststat = (String) listStatusJSON();
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, liststat.c_str());
+        #endif
       }
   
       // ~ ==> Get WS2812 modes.
@@ -773,6 +841,7 @@ void checkForRequests() {
       // Hint: https://github.com/knolleary/pubsubclient/issues/110
       if (payload[0] == '~') {
         DBG_OUTPUT_PORT.printf("MQTT: Get WS2812 modes.\n");
+        #ifdef ENABLE_MQTT
         DBG_OUTPUT_PORT.printf("Error: Not implemented. Message too large for pubsubclient.");
         mqtt_client.publish(mqtt_outtopic, "ERROR: Not implemented. Message too large for pubsubclient.");
         //String json_modes = listModesJSON();
@@ -780,13 +849,22 @@ void checkForRequests() {
   
         //int res = mqtt_client.publish(mqtt_outtopic, json_modes.c_str(), json_modes.length());
         //DBG_OUTPUT_PORT.printf("Result: %d / %d", res, json_modes.length());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String("ERROR: Not implemented. Message too large for AsyncMQTT.").c_str());
+        #endif
       }
   
       // / ==> Set WS2812 mode.
       if (payload[0] == '/') {
         handleSetWS2812FXMode(payload);
         DBG_OUTPUT_PORT.printf("MQTT: Set WS2812 mode [%s]\n", payload);
+        #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
+        #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String(String("OK ") + String((char *)payload)).c_str());
+        #endif
         #ifdef ENABLE_HOMEASSISTANT
           stateOn = true;
           sendState();
@@ -798,7 +876,8 @@ void checkForRequests() {
     #endif
     free(payload);
   }
-  
+
+  #ifdef ENABLE_MQTT
   void mqtt_reconnect() {
     // Loop until we're reconnected
     while (!mqtt_client.connected() && mqtt_reconnect_retries < MQTT_MAX_RECONNECT_TRIES) {
@@ -833,6 +912,73 @@ void checkForRequests() {
       DBG_OUTPUT_PORT.printf("MQTT connection failed, giving up after %d tries ...\n", mqtt_reconnect_retries);
     }
   }
+  #endif
+  #ifdef ENABLE_AMQTT
+    void connectToWifi() {
+      DBG_OUTPUT_PORT.println("Re-connecting to Wi-Fi...");
+      WiFi.begin();
+    }
+
+    void connectToMqtt() {
+      DBG_OUTPUT_PORT.println("Connecting to MQTT...");
+      amqttClient.connect();
+      //(amqttClient.connected()) ? DBG_OUTPUT_PORT.println("Success") : DBG_OUTPUT_PORT.println("Failed");
+    }
+  
+    void onWifiConnect(const WiFiEventStationModeGotIP& event) {
+      DBG_OUTPUT_PORT.println("Connected to Wi-Fi.");
+      connectToMqtt();
+    }
+    
+    void onWifiDisconnect(const WiFiEventStationModeDisconnected& event) {
+      DBG_OUTPUT_PORT.println("Disconnected from Wi-Fi.");
+      mqttReconnectTimer.detach(); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
+      wifiReconnectTimer.once(2, connectToWifi);
+    }
+    
+    void onMqttConnect(bool sessionPresent) {
+      DBG_OUTPUT_PORT.println("Connected to MQTT.");
+      DBG_OUTPUT_PORT.print("Session present: ");
+      DBG_OUTPUT_PORT.println(sessionPresent);
+      char * message = new char[18 + strlen(HOSTNAME) + 1];
+      strcpy(message, "McLighting ready: ");
+      strcat(message, HOSTNAME);
+      amqttClient.publish(mqtt_outtopic.c_str(), 1, false, message);
+      //Subscribe
+      uint16_t packetIdSub1 = amqttClient.subscribe((char *)mqtt_intopic.c_str(),1);
+      DBG_OUTPUT_PORT.print("Subscribing at QoS 1, packetId: "); DBG_OUTPUT_PORT.println(packetIdSub1);
+      #ifdef ENABLE_HOMEASSISTANT
+        uint16_t packetIdSub2 = amqttClient.subscribe((char *)mqtt_ha_state_in.c_str(),1);
+        DBG_OUTPUT_PORT.print("Subscribing at QoS 1, packetId: "); DBG_OUTPUT_PORT.println(packetIdSub2);
+        uint16_t packetIdSub3 = amqttClient.subscribe((char *)mqtt_ha_speed.c_str(),1);
+        DBG_OUTPUT_PORT.print("Subscribing at QoS 1, packetId: "); DBG_OUTPUT_PORT.println(packetIdSub3);
+      #endif
+    }
+    
+    void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
+      DBG_OUTPUT_PORT.print("Disconnected from MQTT, reason: ");
+      if (reason == AsyncMqttClientDisconnectReason::TLS_BAD_FINGERPRINT) {
+        DBG_OUTPUT_PORT.println("Bad server fingerprint.");
+      } else if (reason == AsyncMqttClientDisconnectReason::TCP_DISCONNECTED) {
+        DBG_OUTPUT_PORT.println("TCP Disconnected.");
+      } else if (reason == AsyncMqttClientDisconnectReason::MQTT_UNACCEPTABLE_PROTOCOL_VERSION) {
+        DBG_OUTPUT_PORT.println("Bad server fingerprint.");
+      } else if (reason == AsyncMqttClientDisconnectReason::MQTT_IDENTIFIER_REJECTED) {
+        DBG_OUTPUT_PORT.println("MQTT Identifier rejected.");
+      } else if (reason == AsyncMqttClientDisconnectReason::MQTT_SERVER_UNAVAILABLE) {
+        DBG_OUTPUT_PORT.println("MQTT server unavailable.");
+      } else if (reason == AsyncMqttClientDisconnectReason::MQTT_MALFORMED_CREDENTIALS) {
+        DBG_OUTPUT_PORT.println("MQTT malformed credentials.");
+      } else if (reason == AsyncMqttClientDisconnectReason::MQTT_NOT_AUTHORIZED) {
+        DBG_OUTPUT_PORT.println("MQTT not authorized.");
+      } else if (reason == AsyncMqttClientDisconnectReason::ESP8266_NOT_ENOUGH_SPACE) {
+        DBG_OUTPUT_PORT.println("Not enough space on esp8266.");
+      }
+      if (WiFi.isConnected()) {
+        mqttReconnectTimer.once(5, connectToMqtt);
+      }
+    } 
+  #endif
 #endif
 
 
@@ -853,10 +999,13 @@ void checkForRequests() {
       buttonState = false;
       #ifdef ENABLE_MQTT
         mqtt_client.publish(mqtt_outtopic, String("OK =off").c_str());
-       #ifdef ENABLE_HOMEASSISTANT
-         stateOn = false;
-         sendState();
-       #endif
+      #endif
+      #ifdef ENABLE_AMQTT
+        amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String("OK =off").c_str());
+      #endif
+      #ifdef ENABLE_HOMEASSISTANT
+        stateOn = false;
+        sendState();
       #endif
     }
   }
@@ -867,10 +1016,13 @@ void checkForRequests() {
     setModeByStateString(BTN_MODE_MEDIUM);
     #ifdef ENABLE_MQTT
       mqtt_client.publish(mqtt_outtopic, String("OK =fire flicker").c_str());
-      #ifdef ENABLE_HOMEASSISTANT
-        stateOn = true;
-        sendState();
-      #endif
+    #endif
+    #ifdef ENABLE_AMQTT
+      amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String("OK =fire flicker").c_str());
+    #endif
+    #ifdef ENABLE_HOMEASSISTANT
+      stateOn = true;
+      sendState();
     #endif
   }
   
@@ -880,10 +1032,13 @@ void checkForRequests() {
     setModeByStateString(BTN_MODE_LONG);
     #ifdef ENABLE_MQTT
       mqtt_client.publish(mqtt_outtopic, String("OK =fireworks random").c_str());
-      #ifdef ENABLE_HOMEASSISTANT
-       stateOn = true;
-       sendState();
-      #endif
+    #endif
+    #ifdef ENABLE_AMQTT
+      amqttClient.publish(mqtt_outtopic.c_str(), 1, false, String("OK =fireworks random").c_str());
+    #endif
+    #ifdef ENABLE_HOMEASSISTANT
+     stateOn = true;
+     sendState();
     #endif
   }
   

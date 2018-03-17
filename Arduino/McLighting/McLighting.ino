@@ -35,6 +35,21 @@
   PubSubClient mqtt_client(espClient);
 #endif
 
+#ifdef ENABLE_AMQTT
+  #include <Ticker.h>
+  #include <AsyncMqttClient.h>     //https://github.com/marvinroger/async-mqtt-client
+  #ifdef ENABLE_HOMEASSISTANT
+    #include <ArduinoJson.h>
+  #endif
+  
+  AsyncMqttClient amqttClient;
+  Ticker mqttReconnectTimer;
+  
+  WiFiEventHandler wifiConnectHandler;
+  WiFiEventHandler wifiDisconnectHandler;
+  Ticker wifiReconnectTimer;
+#endif
+
 
 // ***************************************************************************
 // Instanciate HTTP(80) / WebSockets(81) Server
@@ -42,6 +57,10 @@
 ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
 
+#ifdef HTTP_OTA
+#include <ESP8266HTTPUpdateServer.h>
+ESP8266HTTPUpdateServer httpUpdater;
+#endif
 
 // ***************************************************************************
 // Load libraries / Instanciate WS2812FX library
@@ -173,9 +192,16 @@ void saveConfigCallback () {
 // MAIN
 // ***************************************************************************
 void setup() {
+//  system_update_cpu_freq(160);
+  
   DBG_OUTPUT_PORT.begin(115200);
   EEPROM.begin(512);
 
+  #ifdef ENABLE_AMQTT
+    wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
+    wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
+  #endif
+  
   // set builtin led pin as output
   pinMode(BUILTIN_LED, OUTPUT);
   // button pin setup
@@ -203,7 +229,7 @@ void setup() {
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
   // id/name placeholder/prompt default length
-  #ifdef ENABLE_MQTT
+  #if defined(ENABLE_MQTT) or defined(ENABLE_AMQTT)
     String settings_available = readEEPROM(134, 1);
     if (settings_available == "1") {
       readEEPROM(0, 64).toCharArray(mqtt_host, 64);   // 0-63
@@ -230,7 +256,7 @@ void setup() {
   //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.setAPCallback(configModeCallback);
 
-  #ifdef ENABLE_MQTT
+  #if defined(ENABLE_MQTT) or defined(ENABLE_AMQTT)
     //set config save notify callback
     wifiManager.setSaveConfigCallback(saveConfigCallback);
   
@@ -252,7 +278,7 @@ void setup() {
     delay(1000);
   }
 
-  #ifdef ENABLE_MQTT
+  #if defined(ENABLE_MQTT) or defined(ENABLE_AMQTT)
     //read updated parameters
     strcpy(mqtt_host, custom_mqtt_host.getValue());
     strcpy(mqtt_port, custom_mqtt_port.getValue());
@@ -333,6 +359,18 @@ void setup() {
       
       mqtt_client.setServer(mqtt_host, String(mqtt_port).toInt());
       mqtt_client.setCallback(mqtt_callback);
+    }
+  #endif
+
+  #ifdef ENABLE_AMQTT
+    if (mqtt_host != "" && String(mqtt_port).toInt() > 0) {
+      amqttClient.onConnect(onMqttConnect);
+      amqttClient.onDisconnect(onMqttDisconnect);
+      amqttClient.onMessage(onMqttMessage);
+      amqttClient.setServer(mqtt_host, String(mqtt_port).toInt());
+      amqttClient.setClientId(mqtt_clientid);
+
+      connectToMqtt();
     }
   #endif
 
@@ -572,6 +610,10 @@ void setup() {
     getStatusJSON();
   });
 
+  #ifdef HTTP_OTA
+    httpUpdater.setup(&server, "/firmware", "admin", "allforfun");
+  #endif
+  
   server.begin();
 
   // Start MDNS service
