@@ -7,6 +7,9 @@
 > Because of it's open architecture and APIs it's easy to build new clients for different platforms (iOS, Android, Windows Universal Apps, Siri/Cortana integration, ...). 
 
 ___
+Update 16.03.2018:
+Added AsyncMQTT as an alternative to PubSubClient. Please try this out and let us know if there are issues.
+
 Update 15.02.2018:
 Replaced Home Assistant Support using MQTT Light to MQTT JSON Light.
 
