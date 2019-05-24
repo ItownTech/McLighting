@@ -56,7 +56,41 @@
  * 23 Dec 2018 v 2.2.0 
  * - Add E1.31 mode to getModes(), no need to change McLightingUI
  * 
- * 6 Jan 2018 v 2.2.0
+ * 6 Jan 2019 v 2.2.0
  * - fix webserver not responding when E1.31 is mode is acivated: do a webserver.loop() for every 1.31 packet
  * - HA E1.31 mode added
+ * 
+ * 24 Jan 2019 v 2.2.1
+ * - checkForRequests() is vital for e131 mode, remove from #ifdef ENABLE_LEGACY_ANIMATIONS
+ * - Minor fixes related to NeoPixelBus UART methods
+ * - Modify platformio.ini for future bump to esp8266-arduino v2.5.0 (shamelessly stolen settings from espurna project)
+ * - Gzipped index2.htm & edit.htm.gz(untouched), convereted to hex format using xxd -i abcd.gz > html_gz.h
+ * - Pointers added for WS2812FX & NeoPixelBus
+ * - new "REST API": /pixelconf?ct=xxx to change length of LED strip
+ * - new "REST API": /pixelconf?rgbo=xxx to change RGB order
+ * - new "REST API": /pixelconf?pin=GPIO_NO to change PIN# (Allowed GPIO values: 16/5/4/0/2/14/12/13/15/3/1)
+ * - added HA 0.87 version support https://github.com/toblum/McLighting/issues/327
+ * - Added alternative way to send large messages using PubSubClient
+ * - Bump PIO core to 2.0.4
+ * - Send HA state on MQTT connect, address https://github.com/toblum/McLighting/issues/349
+ * - Add LWT for MQTT and AMQTT, address https://github.com/toblum/McLighting/issues/340
+ * - Added file for custom WS2812FX animations in custom slots
+ * - Rename varaibles to be char instead of String
+ * - Added LED pixel count and PIN settings to WiFiManager
+ * - Gamma correction to LEDs
+ * 
+ * 7 Mar 2019 v 2.2.2
+ * - Add compiler flag for WS2811 strips #define LED_TYPE_WS2811
+ * - Hotfix #351
+ * 
+ * 18 Mar 2019 v 2.2.3 (mostly bugfix)
+ * - PubSubClient related bug fixed
+ * - UART 1 and 0 were mixed up
+ * - LWT revisit
+ * - Custom mode needs index
+ * 
+ * 16 Apr 2019
+ * - fix all issues with 2.2.3 (REST API)
+ * - #368 WDT fix
+ # - #371 E1.31 fix
  */
